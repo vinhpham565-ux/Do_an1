@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════
-// PROFESSIONAL OSCILLOSCOPE - WAVEFORM ANALYZER (WASM C++ EDITION)
+// BỘ TỔNG HỢP ÂM THANH - GIAO DIỆN MỚI + LOGIC ÂM THANH GỐC
 // ════════════════════════════════════════════════════════════
 
 const { useState, useRef, useEffect } = React;
@@ -110,7 +110,7 @@ function App() {
 
   // ─────── PHÁT ÂM THANH ──────────
   const waveMap = { 'sine': 0, 'sawtooth': 1, 'square': 2, 'triangle': 3 };
-  const modMap = { 'OFF': 0, 'AM': 1, 'FM': 2 }; // Từ điển map chữ sang số cho Modulation C++
+  const modMap = { 'OFF': 0, 'AM': 1, 'FM': 2 }; 
   let wasmModuleCache = null;
 
   async function loadWasmModule() {
@@ -119,9 +119,18 @@ function App() {
     }
     try {
       console.log("📍 [App] Loading WASM module (KhoiTaoLoi)...");
-      if (typeof window.KhoiTaoLoi !== 'function') {
-        throw new Error('KhoiTaoLoi not found in window - make sure may_tao_song.js is loaded in index.html');
+      
+      // FIX LỖI WASM: Thêm cơ chế chờ (Polling)
+      let attempts = 0;
+      while (typeof window.KhoiTaoLoi !== 'function' && attempts < 20) {
+        await new Promise(resolve => setTimeout(resolve, 100)); // Đợi 100ms mỗi vòng lặp
+        attempts++;
       }
+
+      if (typeof window.KhoiTaoLoi !== 'function') {
+        throw new Error('KhoiTaoLoi not found - Hãy chắc chắn bạn đã link may_tao_song.js trong file index.html');
+      }
+      
       const Module = await window.KhoiTaoLoi();
       console.log("✅ [App] WASM Module loaded successfully!");
       wasmModuleCache = Module;
@@ -143,7 +152,7 @@ function App() {
     try {
       wasmModule = await loadWasmModule();
     } catch (e) {
-      alert('Lỗi tải WASM: ' + e.message);
+      alert('Lỗi tải C++ WASM: ' + e.message);
       return;
     }
 
@@ -287,177 +296,165 @@ function App() {
 
   const period = (1000 / paramsRef.current.frequency).toFixed(2);
 
-  // ─────── RENDER ──────────
+  // ─────── RENDER KẾT HỢP GIAO DIỆN MỚI ──────────
   return (
-    <>
-      {/* ĐÃ SỬA ĐÚNG TÊN Ở ĐÂY */}
-      <h1>Bộ Tổng Hợp Âm Thanh <span style={{ fontSize: '1.2rem', color: '#ff9a44' }}>(C++ WASM)</span></h1>
-      <p className="subtitle">Nền Tảng Xử Lý Tín Hiệu Số (DSP)</p>
+    <div className="container">
+      <header>
+        <h1>Bộ Tổng Hợp Âm Thanh <span style={{ fontSize: '1.2rem', color: '#ff9a44' }}>(C++ WASM)</span></h1>
+        <p className="subtitle">Nền Tảng Xử Lý Tín Hiệu Số (DSP)</p>
+      </header>
 
-      {/* MAIN OSCILLOSCOPE DISPLAY */}
-      <div className={`canvas-wrapper${playing ? ' playing' : ''}`}>
-        <span className={`canvas-badge${playing ? ' live' : ''}`}>
-          {playing ? '● LIVE' : '○ FROZEN'}
-        </span>
-        <canvas ref={canvasRef} style={{ height: '280px' }} />
+      <div className="main-grid">
+        {/* CARRIER OSCILLATOR PANEL */}
+        <div className="panel osc-panel">
+          <div className="panel-header">CARRIER OSCILLATOR</div>
+          
+          <div className="wave-selector">
+            {WAVE_TYPES.map(w => (
+              <button 
+                key={w} 
+                className={`wave-btn ${paramsRef.current.waveType === w ? 'active' : ''}`}
+                onClick={() => handleWaveTypeChange(w)}
+              >
+                {WAVE_LABELS[w]}
+              </button>
+            ))}
+          </div>
+
+          <div className="controls">
+            <div className="control-group">
+              <div className="control-label">
+                <span className="control-name">Amplitude</span>
+                <span className="control-value">{paramsRef.current.amplitude}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                defaultValue={DEFAULT_AMPLITUDE}
+                onChange={(e) => handleAmplitudeChange(Number(e.target.value))}
+              />
+            </div>
+
+            <div className="control-group">
+              <div className="control-label">
+                <span className="control-name">Frequency</span>
+                <span className="control-value">{paramsRef.current.frequency} Hz</span>
+              </div>
+              <input
+                type="range"
+                min="20"
+                max="2000"
+                defaultValue={DEFAULT_FREQUENCY}
+                onChange={(e) => handleFrequencyChange(Number(e.target.value))}
+              />
+            </div>
+            
+            <button className={`play-btn ${playing ? 'playing' : ''}`} onClick={togglePlay}>
+              {playing ? '■ STOP SYSTEM' : '▶ START SYSTEM'}
+            </button>
+          </div>
+        </div>
+
+        {/* MAIN OSCILLOSCOPE PANEL */}
+        <div className="panel screen-panel">
+          <div className="screen-header">
+            <span>CH1: OUTPUT ANALYZER</span>
+            <span style={{ color: playing ? '#4ade80' : '#f87171' }}>
+              {playing ? '● ACTIVE' : '○ STANDBY'}
+            </span>
+          </div>
+          <div className="canvas-container">
+            <canvas ref={canvasRef} width={800} height={400} />
+          </div>
+        </div>
+
+        {/* LFO PANEL */}
+        <div className="panel lfo-panel">
+          <div className="panel-header">LFO MODULATION LAB</div>
+          
+          <div className="lfo-visualizer">
+             <canvas ref={lfoCanvasRef} width={300} height={100} />
+          </div>
+          
+          <div className="lfo-wave-selector">
+            {LFO_WAVE_TYPES.map(w => (
+              <button 
+                key={`lfo-${w}`} 
+                className={`lfo-wave-btn ${paramsRef.current.lfoWaveType === w ? 'active' : ''}`}
+                onClick={() => handleLfoWaveTypeChange(w)}
+              >
+                {LFO_WAVE_LABELS[w]}
+              </button>
+            ))}
+          </div>
+
+          <div className="lfo-mode-buttons">
+            {MODULATION_MODES.map(mode => (
+              <button 
+                key={mode} 
+                className={`lfo-mode-btn ${paramsRef.current.modulationMode === mode ? 'active' : ''}`}
+                onClick={() => handleModulationModeChange(mode)}
+              >
+                {MODULATION_LABELS[mode]}
+              </button>
+            ))}
+          </div>
+
+          <div className="controls">
+            <div className={`control-group ${paramsRef.current.modulationMode === 'OFF' ? 'disabled' : ''}`}>
+              <div className="control-label">
+                <span className="control-name">LFO Rate</span>
+                <span className="control-value">{paramsRef.current.lfoFrequency.toFixed(2)} Hz</span>
+              </div>
+              <input
+                type="range"
+                min={LFO_FREQ_MIN}
+                max={LFO_FREQ_MAX}
+                step="0.01"
+                defaultValue={DEFAULT_LFO_FREQUENCY}
+                onChange={(e) => handleLfoFrequencyChange(Number(e.target.value))}
+              />
+            </div>
+
+            <div className={`control-group ${paramsRef.current.modulationMode === 'OFF' ? 'disabled' : ''}`}>
+              <div className="control-label">
+                <span className="control-name">Modulation Depth</span>
+                <span className="control-value">{paramsRef.current.lfoDepth}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                defaultValue={DEFAULT_LFO_DEPTH}
+                onChange={(e) => handleLfoDepthChange(Number(e.target.value))}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="info-row">
+        <div className="info-chip">Freq: <span>{paramsRef.current.frequency}Hz</span></div>
+        <div className="info-chip">Period: <span>{period}ms</span></div>
+        <div className="info-chip">Amplitude: <span>{paramsRef.current.amplitude}%</span></div>
         
-        <button
-          className={`play-btn ${playing ? 'playing' : 'stopped'}`}
-          onClick={togglePlay}
-        >
-          {playing ? '⏹ Stop' : '▶ Play'}
-        </button>
-      </div>
-
-      {/* MAIN WAVEFORM SELECTOR */}
-      <div className="wave-type-row">
-        {WAVE_TYPES.map((t) => (
-          <button
-            key={t}
-            className={`wave-btn${paramsRef.current.waveType === t ? ' active' : ''}`}
-            onClick={() => {
-              handleWaveTypeChange(t);
-              setSliderUpdate(prev => prev + 1); 
-            }}
-          >
-            {WAVE_LABELS[t]}
-          </button>
-        ))}
-      </div>
-
-      {/* MAIN CONTROLS */}
-      <div className="controls">
-        <div className="control-card">
-          <div className="control-label">
-            <span className="control-name">Amplitude</span>
-            <span className="control-value">{paramsRef.current.amplitude}%</span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            defaultValue={DEFAULT_AMPLITUDE}
-            onChange={(e) => handleAmplitudeChange(Number(e.target.value))}
-          />
+        <div className={`info-chip ${paramsRef.current.modulationMode === 'OFF' ? 'v-hidden' : ''}`}>
+          Modulation: <span style={{ color: '#ff9a44' }}>
+            {paramsRef.current.modulationMode === 'AM' ? '🔊 AM' : paramsRef.current.modulationMode === 'FM' ? '📈 FM' : 'OFF'}
+          </span>
         </div>
-
-        <div className="control-card">
-          <div className="control-label">
-            <span className="control-name">Frequency</span>
-            <span className="control-value">{paramsRef.current.frequency}Hz</span>
-          </div>
-          <input
-            type="range"
-            min="20"
-            max="2000"
-            defaultValue={DEFAULT_FREQUENCY}
-            onChange={(e) => handleFrequencyChange(Number(e.target.value))}
-          />
+        <div className={`info-chip ${paramsRef.current.modulationMode === 'OFF' ? 'v-hidden' : ''}`}>LFO Rate: <span>{paramsRef.current.lfoFrequency.toFixed(2)}Hz</span></div>
+        <div className={`info-chip ${paramsRef.current.modulationMode === 'OFF' ? 'v-hidden' : ''}`}>LFO Wave: <span>{LFO_WAVE_LABELS[paramsRef.current.lfoWaveType]}</span></div>
+        <div className={`info-chip ${paramsRef.current.modulationMode === 'OFF' ? 'v-hidden' : ''}`}>LFO Depth: <span>{paramsRef.current.lfoDepth}%</span></div>
+        
+        <div className="info-chip">
+          Status: <span style={{ color: playing ? '#4ade80' : '#f87171' }}>
+            {playing ? 'Playing' : 'Stopped'}
+          </span>
         </div>
       </div>
-
-      {/* LFO CONTROL CENTER */}
-      <div className="lfo-section">
-        <h3>⚙ LFO Engine - Control Center</h3>
-
-        {/* LFO MINI OSCILLOSCOPE */}
-        <div className="lfo-visualizer">
-          <canvas ref={lfoCanvasRef} style={{ height: '120px' }} />
-          <span className="lfo-label">LFO Shape Monitor</span>
-        </div>
-
-        {/* LFO WAVEFORM SELECTOR */}
-        <div className="lfo-wave-selector">
-          <label className="control-name">LFO Waveform:</label>
-          <div className="lfo-wave-buttons">
-            {LFO_WAVE_TYPES.map((t) => (
-              <button
-                key={t}
-                className={`lfo-wave-btn${paramsRef.current.lfoWaveType === t ? ' active' : ''}`}
-                onClick={() => {
-                  handleLfoWaveTypeChange(t);
-                }}
-              >
-                {LFO_WAVE_LABELS[t]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* MODULATION MODE */}
-        <div className="lfo-mode-buttons">
-          <label className="control-name">Modulation Mode:</label>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {MODULATION_MODES.map((mode) => (
-              <button
-                key={mode}
-                className={`lfo-mode-btn${paramsRef.current.modulationMode === mode ? ' active' : ''}`}
-                onClick={(e) => {
-                  handleModulationModeChange(mode);
-                }}
-              >
-                {MODULATION_LABELS[mode] || mode}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* LFO PARAMETERS */}
-        <div className="controls">
-          <div className="control-card">
-            <div className="control-label">
-              <span className="control-name">LFO Frequency</span>
-              <span className="control-value">{paramsRef.current.lfoFrequency.toFixed(2)}Hz</span>
-            </div>
-            <input
-              type="range"
-              min={LFO_FREQ_MIN}
-              max={LFO_FREQ_MAX}
-              step="0.1"
-              defaultValue={DEFAULT_LFO_FREQUENCY}
-              onChange={(e) => handleLfoFrequencyChange(Number(e.target.value))}
-            />
-          </div>
-
-          <div className="control-card">
-            <div className="control-label">
-              <span className="control-name">LFO Depth</span>
-              <span className="control-value">{paramsRef.current.lfoDepth}%</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              defaultValue={DEFAULT_LFO_DEPTH}
-              onChange={(e) => handleLfoDepthChange(Number(e.target.value))}
-            />
-          </div>
-        </div>
-
-        {/* INFO DISPLAY */}
-        <div className="info-row info-row-fixed">
-          <div className="info-chip">Wave: <span>{WAVE_LABELS[paramsRef.current.waveType]}</span></div>
-          <div className="info-chip">Freq: <span>{paramsRef.current.frequency}Hz</span></div>
-          <div className="info-chip">Period: <span>{period}ms</span></div>
-          <div className="info-chip">Amplitude: <span>{paramsRef.current.amplitude}%</span></div>
-          
-          <div className={`info-chip ${paramsRef.current.modulationMode === 'OFF' ? 'v-hidden' : ''}`}>
-            Modulation: <span style={{ color: '#ff9a44' }}>
-              {paramsRef.current.modulationMode === 'AM' ? '🔊 AMPLITUDE' : paramsRef.current.modulationMode === 'FM' ? '📈 FREQUENCY' : 'OFF'}
-            </span>
-          </div>
-          <div className={`info-chip ${paramsRef.current.modulationMode === 'OFF' ? 'v-hidden' : ''}`}>LFO Rate: <span>{paramsRef.current.lfoFrequency.toFixed(2)}Hz</span></div>
-          <div className={`info-chip ${paramsRef.current.modulationMode === 'OFF' ? 'v-hidden' : ''}`}>LFO Wave: <span>{LFO_WAVE_LABELS[paramsRef.current.lfoWaveType]}</span></div>
-          <div className={`info-chip ${paramsRef.current.modulationMode === 'OFF' ? 'v-hidden' : ''}`}>LFO Depth: <span>{paramsRef.current.lfoDepth}%</span></div>
-          
-          <div className="info-chip">
-            Status: <span style={{ color: playing ? '#4ade80' : '#f87171' }}>
-              {playing ? 'PLAYING' : 'FROZEN'}
-            </span>
-          </div>
-        </div>
-      </div>
-    </>
+    </div>
   );
 }
 

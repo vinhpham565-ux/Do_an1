@@ -60,8 +60,8 @@ function drawFromAnalyser(canvas, analyser, shouldClear = true) {
   let x = 0;
   for (let i = 0; i < visibleLen; i++) {
     const v = data[i] / 128.0;
-    const y = (v / 2) * H;
-
+    const y = H - (v * H / 2);
+    
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     x += sliceW;
   }

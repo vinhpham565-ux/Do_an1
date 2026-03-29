@@ -253,6 +253,7 @@ function App() {
 
   const handleWaveTypeChange = (type) => {
     paramsRef.current.waveType = type;
+    setSliderUpdate(prev => prev + 1);
     if (oscillatorRef.current) {
       oscillatorRef.current.chon_loai_dong(waveMap[type] || 0);
     }
